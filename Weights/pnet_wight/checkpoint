@@ -1,2 +1,0 @@
-model_checkpoint_path: "pnet_30.ckpt"
-all_model_checkpoint_paths: "pnet_30.ckpt"
