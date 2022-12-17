@@ -17,16 +17,18 @@ def red_tf(imgs,net_size):
         'image/encoded': tf.io.FixedLenFeature([], tf.string),
         'image/label': tf.io.FixedLenFeature([], tf.int64),
         'image/roi': tf.io.FixedLenFeature([4], tf.float32),
+        'image/landmark': tf.io.FixedLenFeature([10],tf.float32)
     }
     def _parse_image_function(example_proto):
       # Parse the input tf.Example proto using the dictionary above.
       return tf.io.parse_single_example(example_proto, image_feature_description)
  
     parsed_image_dataset = raw_image_dataset.map(_parse_image_function)
-    print(parsed_image_dataset)
+    #print(parsed_image_dataset)
     image_batch = []
     label_batch = []
     bbox_batch = []
+    landmark_batch = []
  
     for image_features in parsed_image_dataset:
  
@@ -43,6 +45,8 @@ def red_tf(imgs,net_size):
  
         roi = tf.cast(image_features['image/roi'], tf.float32)
         bbox_batch.append(roi)
+        
+        landmark = tf.cast(image_features['image/landmark'], tf.float32)
+        landmark_batch.append(landmark)
  
- 
-    return image_batch,label_batch,bbox_batch
+    return image_batch,label_batch,bbox_batch,landmark_batch

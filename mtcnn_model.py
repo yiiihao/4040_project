@@ -20,7 +20,9 @@ def Pnet():
     #cls_prob = tf.squeeze(classifier, [1, 2], name='cls_prob')
     bbox_regress = tf.keras.layers.Conv2D(4, (1, 1), name='conv4-2')(x)
     #bbox_pred = tf.squeeze(bbox_regress,[1,2],name='bbox_pred')
-    model = tf.keras.models.Model([input], [classifier, bbox_regress])
+    #my code
+    landmark_regress = tf.keras.layers.Conv2D(10, (1, 1), name='conv4-3')(x)
+    model = tf.keras.models.Model([input], [classifier, bbox_regress, landmark_regress])
     return model
  
 #处理的24X24网络
@@ -41,7 +43,8 @@ def Rnet():
     x = tf.keras.layers.PReLU(name='prelu4')(x)
     classifier = tf.keras.layers.Dense(2,activation='softmax',name='conv5-1')(x)
     bbox_regress = tf.keras.layers.Dense(4, name='conv5-2')(x)
-    model = tf.keras.models.Model([input], [classifier, bbox_regress])
+    landmark_regress = tf.keras.layers.Dense(10, name='conv5-3')(x)
+    model = tf.keras.models.Model([input], [classifier, bbox_regress,landmark_regress])
     return model
  
 #处理的48X48网络
@@ -73,10 +76,10 @@ def Onet():
     # 256 -> 2 256 -> 4 256 -> 10
     classifier = tf.keras.layers.Dense(2,activation='softmax',name='conv6-1')(x)
     bbox_regress = tf.keras.layers.Dense(4, name='conv6-2')(x)
-    #landmark_regress = tf.keras.layers.Dense(10, name='conv6-3')(x)
+    landmark_regress = tf.keras.layers.Dense(10, name='conv6-3')(x)
     #model = tf.keras.models.Model([input], [classifier, bbox_regress,landmark_regress])
     #my code
-    model = tf.keras.models.Model([input], [classifier, bbox_regress])
+    model = tf.keras.models.Model([input], [classifier, bbox_regress,landmark_regress])
     return model
  
  
@@ -116,7 +119,9 @@ def cls_ohem(cls_prob, label):
  
     #num_keep_radio = 0.7  选取70%的数据
     keep_num = tf.cast(num_valid*0.7,dtype=tf.int32)
-    # print("keep_num",keep_num)
+    # 
+    
+    ("keep_num",keep_num)
  
     # 只选取neg，pos的70%损失
     #loss = loss * num_valid
@@ -139,6 +144,7 @@ def bbox_ohem(bbox_pred,bbox_target,label):
     valid_inds = tf.where(tf.math.equal(tf.math.abs(label),1),ones_index,zeros_index)
  
     #计算平方差损失
+ 
     square_error = tf.math.square(bbox_pred - bbox_target)  #16-1-16-14
     square_error = tf.math.reduce_sum(square_error,axis=1)  #16*16*4
  
@@ -147,7 +153,9 @@ def bbox_ohem(bbox_pred,bbox_target,label):
     num_valid = tf.math.reduce_sum(valid_inds)
     keep_num = tf.cast(num_valid,dtype=tf.int32)
  
- 
+    if keep_num == 0:
+        return tf.constant(0, dtype=tf.float32)
+    
     #OHEM策略，保留部分pos,part的损失
     #square_error = square_error * num_valid
     square_error = square_error * valid_inds
@@ -156,36 +164,38 @@ def bbox_ohem(bbox_pred,bbox_target,label):
     _,k_index = tf.math.top_k(square_error,k=keep_num)
     # 将部分pos样本和part样本的平方和提取出来
     square_error = tf.gather(square_error, k_index)
-    
-    print('square_error',square_error)
-    
-    if np.isnan(tf.reduce_mean(square_error)):
-        return tf.zeros(0)
  
-    return tf.reduce_mean(square_error)
+    return tf.math.reduce_mean(square_error)
  
  
 #人脸五官损失函数
 def landmark_ohem(landmark_pred,landmark_target,label):
     #keep label =-2  then do landmark detection
+
     ones = tf.ones_like(label,dtype=tf.float32)
     zeros = tf.zeros_like(label,dtype=tf.float32)
  
     # 只保留landmark数据
     valid_inds = tf.where(tf.equal(label,-2),ones,zeros)
- 
+
     # 计算平方差损失
-    square_error = tf.square(landmark_pred-landmark_target)
-    square_error = tf.reduce_sum(square_error,axis=1)
- 
+    square_error = tf.math.square(landmark_pred - landmark_target)
+    square_error = tf.math.reduce_sum(square_error,axis=1)
+
     # 保留数据个数
     num_valid = tf.math.reduce_sum(valid_inds) # 0
     keep_num = tf.cast(num_valid, dtype=tf.int32) # 0
  
-    # 保留landmark部分数据损失
-    square_error = square_error*valid_inds
-    square_error, k_index = tf.nn.top_k(square_error, k=keep_num)
-    # square_error = tf.gather(square_error, k_index)
+    if keep_num == 0:
+        return tf.constant(0, dtype=tf.float32)
+
+    # 保留landmark部分数据损失    
+    square_error = square_error * valid_inds
+    
+    _, k_index = tf.math.top_k(square_error, k=keep_num)
+    
+    #my code
+    square_error = tf.gather(square_error, k_index)
  
     return tf.math.reduce_mean(square_error) # 当square_error为空时会出现nan bug
  

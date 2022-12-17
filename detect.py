@@ -204,7 +204,7 @@ def detect_pent(image):
         img_resized = tf.expand_dims(im_resized, axis=0)
         img_resized = tf.cast(img_resized, tf.float32)
  
-        cls_prob, bbox_pred = model.predict(img_resized)
+        cls_prob, bbox_pred, _ = model.predict(img_resized)
  
         cls_prob = cls_prob[0]
         bbox_pred = bbox_pred[0]
@@ -290,7 +290,7 @@ def detect_Rnet(img,dets):
  
         cropped_imgs[i,:,:,:] = (cv2.resize(tmp,(24,24)) - 127.5) / 128
  
-    cls_scores, reg = model.predict(cropped_imgs)
+    cls_scores, reg,_ = model.predict(cropped_imgs)
  
  
  
@@ -340,7 +340,7 @@ def detect_Onet(img,dets):
  
     #cls_scores,reg,linm = model.predict(cropped_imgs)
     #my code
-    cls_scores,reg = model.predict(cropped_imgs)
+    cls_scores,reg,landmark = model.predict(cropped_imgs)
  
     cls_scores = cls_scores[:,1]
  
@@ -350,18 +350,24 @@ def detect_Onet(img,dets):
         boxes = dets[keep_inds]
         boxes[:,4] = cls_scores[keep_inds]
         reg = reg[keep_inds]
- 
+        landmark = landmark[keep_inds]
     else:
-        return None,None
+        return None,None,None
  
  
     # h = boxes[:,3] - boxes[:,1] + 1
     # w = boxes[:.2] - boxes[:,0] + 1
+    
+    w = boxes[:, 2] - boxes[:, 0] + 1
+    h = boxes[:, 3] - boxes[:, 1] + 1
+    landmark[:, 0::2] = (np.tile(w, (5, 1)) * landmark[:, 0::2].T + np.tile(boxes[:, 0], (5, 1)) - 1).T
+    landmark[:, 1::2] = (np.tile(h, (5, 1)) * landmark[:, 1::2].T + np.tile(boxes[:, 1], (5, 1)) - 1).T
  
     boxes_c = calibrate_box(boxes,reg)
     boxes = boxes[nms(boxes,0.6)]
     keep = nms(boxes_c,0.6)
  
     boxes_c = boxes_c[keep]
+    landmark = landmark[keep]
  
-    return boxes,boxes_c
+    return boxes,boxes_c,landmark
